@@ -740,35 +740,77 @@ func readStructColumns(t reflect.Type) (cols []*ColumnMap, version *ColumnMap) {
 				version = subversion
 			}
 		} else {
-			columnName := f.Tag.Get("db")
-			if columnName == "" {
-				columnName = f.Name
-			}
-			cm := &ColumnMap{
-				ColumnName: columnName,
-				Transient:  columnName == "-",
-				fieldName:  f.Name,
-				gotype:     f.Type,
-			}
+
+			var cm ColumnMap
+			readColumnsParams(&cm, f)
+
+			fmt.Println("isNot Null value : ", cm.isNotNull)
+
 			// Check for nested fields of the same field name and
 			// override them.
 			shouldAppend := true
 			for index, col := range cols {
 				if !col.Transient && col.fieldName == cm.fieldName {
-					cols[index] = cm
+					cols[index] = &cm
 					shouldAppend = false
 					break
 				}
 			}
 			if shouldAppend {
-				cols = append(cols, cm)
+				cols = append(cols, &cm)
 			}
 			if cm.fieldName == "Version" {
-				version = cm
+				version = &cm
 			}
 		}
 	}
 	return
+}
+
+//used to read params of columns struct
+// it fill a columnMap
+func readColumnsParams(cm *ColumnMap, f reflect.StructField) {
+
+	data := f.Tag.Get(structTagName)
+	var params []string
+	params = strings.Split(data, structTagSeparator)
+	cm.ColumnName = strings.TrimSpace(params[0])
+
+	if cm.ColumnName == "" {
+		cm.ColumnName = f.Name
+	}
+
+	cm.fieldName = f.Name
+	cm.gotype = f.Type
+
+	for _, v := range params[1:] {
+		v = strings.TrimSpace(v)
+		fmt.Println("tag readed : ", v)
+		//tag not null
+		if v == "nn" {
+			cm.isNotNull = true
+		}
+		// tag ignored
+		if v == structTagIgnore {
+			cm.Transient = true
+		}
+		//unique tag
+		if v == "uq" {
+			cm.Unique = true
+		}
+		//unique tag
+		if v == "pk" {
+			cm.isPK = true
+		}
+		//unique tag
+		if v == "ai" {
+			cm.isAutoIncr = true
+		}
+		//we can add lot of cases
+		// first to fill the columnMap completely
+		// after we can add more params like primary key (pk) etc ...
+
+	}
 }
 
 // CreateTables iterates through TableMaps registered to this DbMap and
@@ -1654,12 +1696,12 @@ func columnToFieldIndex(m *DbMap, t reflect.Type, cols []string) ([][]int, error
 		colName := strings.ToLower(cols[x])
 		field, found := t.FieldByNameFunc(func(fieldName string) bool {
 			field, _ := t.FieldByName(fieldName)
-			fieldName = field.Tag.Get("db")
+			var cm ColumnMap
+			readColumnsParams(&cm, field)
+			fieldName = cm.ColumnName
 
 			if fieldName == "-" {
 				return false
-			} else if fieldName == "" {
-				fieldName = field.Name
 			}
 			if tableMapped {
 				colMap := colMapOrNil(table, fieldName)
