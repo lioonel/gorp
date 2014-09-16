@@ -336,14 +336,18 @@ type bindInstance struct {
 	autoIncrFieldName string
 }
 
-func (t *TableMap) bindInsert(elem reflect.Value) (bindInstance, error) {
+func (t *TableMap) bindInsert(elem reflect.Value, forReplace bool) (bindInstance, error) {
 	plan := t.insertPlan
 	if plan.query == "" {
 		plan.autoIncrIdx = -1
 
 		s := bytes.Buffer{}
 		s2 := bytes.Buffer{}
-		s.WriteString(fmt.Sprintf("insert into %s (", t.dbmap.Dialect.QuotedTableForQuery(t.SchemaName, t.TableName)))
+		if forReplace {
+			s.WriteString(fmt.Sprintf("replace into %s (", t.dbmap.Dialect.QuotedTableForQuery(t.SchemaName, t.TableName)))
+		} else {
+			s.WriteString(fmt.Sprintf("insert into %s (", t.dbmap.Dialect.QuotedTableForQuery(t.SchemaName, t.TableName)))
+		}
 
 		x := 0
 		first := true
@@ -623,6 +627,7 @@ type Transaction struct {
 type SqlExecutor interface {
 	Get(i interface{}, keys ...interface{}) (interface{}, error)
 	Insert(list ...interface{}) error
+	Replace(list ...interface{}) error
 	Update(list ...interface{}) (int64, error)
 	Delete(list ...interface{}) (int64, error)
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -878,7 +883,7 @@ func (m *DbMap) createTables(ifNotExists bool) error {
 				if col.isPK || col.isNotNull {
 					s.WriteString(" not null")
 				}
-				if col.isPK && len(table.keys) == 1 {
+				if col.isPK {
 					s.WriteString(" primary key")
 				}
 				if col.Unique {
@@ -1009,7 +1014,11 @@ func (m *DbMap) TruncateTables() error {
 //
 // Panics if any interface in the list has not been registered with AddTable
 func (m *DbMap) Insert(list ...interface{}) error {
-	return insert(m, m, list...)
+	return insert(m, m, false, list...)
+}
+
+func (m *DbMap) Replace(list ...interface{}) error {
+	return insert(m, m, true, list...)
 }
 
 // Update runs a SQL UPDATE statement for each element in list.  List
@@ -1232,7 +1241,11 @@ func argsString(args ...interface{}) string {
 
 // Insert has the same behavior as DbMap.Insert(), but runs in a transaction.
 func (t *Transaction) Insert(list ...interface{}) error {
-	return insert(t.dbmap, t, list...)
+	return insert(t.dbmap, t, false, list...)
+}
+
+func (t *Transaction) Replace(list ...interface{}) error {
+	return insert(t.dbmap, t, true, list...)
 }
 
 // Update had the same behavior as DbMap.Update(), but runs in a transaction.
@@ -2011,7 +2024,7 @@ func update(m *DbMap, exec SqlExecutor, list ...interface{}) (int64, error) {
 	return count, nil
 }
 
-func insert(m *DbMap, exec SqlExecutor, list ...interface{}) error {
+func insert(m *DbMap, exec SqlExecutor, forReplace bool, list ...interface{}) error {
 	for _, ptr := range list {
 		table, elem, err := m.tableForPointer(ptr, false)
 		if err != nil {
@@ -2026,7 +2039,7 @@ func insert(m *DbMap, exec SqlExecutor, list ...interface{}) error {
 			}
 		}
 
-		bi, err := table.bindInsert(elem)
+		bi, err := table.bindInsert(elem, forReplace)
 		if err != nil {
 			return err
 		}
