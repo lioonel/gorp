@@ -563,11 +563,16 @@ type ColumnMap struct {
 	// Not used elsewhere
 	MaxSize int
 
-	fieldName  string
-	gotype     reflect.Type
-	isPK       bool
-	isAutoIncr bool
-	isNotNull  bool
+	fieldName	string
+	gotype		reflect.Type
+	isPK		bool
+	isAutoIncr	bool
+	isNotNull	bool
+	isForeignKey	bool
+	
+	//example : bundle(id_bundle)
+	foreignReference string
+	
 }
 
 // Rename allows you to specify the column name in the table
@@ -798,11 +803,21 @@ func readColumnsParams(cm *ColumnMap, f reflect.StructField) {
 	cm.fieldName = f.Name
 	cm.gotype = f.Type
 
-	for _, v := range params[1:] {
-		v = strings.TrimSpace(v)
+	var tagKey string
+	var splittedTag, tagParams []string
+	for _, fullTag := range params[1:] {
+		splittedTag = strings.Split(fullTag, structTagComplementSeparator)
+		tagKey = splittedTag[0]
+		if len(splittedTag) == 1 {
+			tagParams = nil
+		} else {
+			tagParams = strings.Split(splittedTag[1], structTagParamsSeparator)
+		}
+		
+		
 		fmt.Println("tag readed : ", v)
 
-		switch v {
+		switch tagKey {
 		case "nn":
 			cm.isNotNull = true
 
@@ -821,6 +836,10 @@ func readColumnsParams(cm *ColumnMap, f reflect.StructField) {
 		//unique tag
 		case "ai":
 			cm.isAutoIncr = true
+		
+		case "fk":
+			cm.isForeignKey = true
+			cm.foreignReference = tagParams[0]
 		}
 
 		//we can add lot of cases
@@ -892,6 +911,9 @@ func (m *DbMap) createTables(ifNotExists bool) error {
 				if col.isAutoIncr {
 					s.WriteString(fmt.Sprintf(" %s", m.Dialect.AutoIncrStr()))
 				}
+				if col.isForeignKey {
+					defer m.createForeignKey(table.TableName, col.ColumnName, col.foreignReference)
+				}
 
 				x++
 			}
@@ -927,6 +949,21 @@ func (m *DbMap) createTables(ifNotExists bool) error {
 		}
 	}
 	return err
+}
+
+func (m *DbMap) createForeignKey(tableName, columnName, foreignReference string) {
+	requete := bytes.Buffer{}
+	requete.WriteString("alter table ")
+	requete.WriteString(tableName)
+	requete.WriteString(" add constraint fk_")
+	requete.WriteString(columnName)
+	requete.WriteString(" foreign key (")
+	requete.WriteString(columnName)
+	requete.WriteString(") references ")
+	requete.WriteString(foreignReference)
+	requete.WriteString(";")
+	
+	m.Exec(requete.String())
 }
 
 // DropTable drops an individual table.  Will throw an error
