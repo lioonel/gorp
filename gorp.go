@@ -1,5 +1,4 @@
-// Copyright 2012 James Cooper. All rights reserved.
-// Use of this source code is governed by a MIT-style
+// Copyright 2012 James Cooper. All rights reserved. // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
 // Package gorp provides a simple way to marshal Go structs to and from
@@ -563,16 +562,15 @@ type ColumnMap struct {
 	// Not used elsewhere
 	MaxSize int
 
-	fieldName	string
-	gotype		reflect.Type
-	isPK		bool
-	isAutoIncr	bool
-	isNotNull	bool
-	isForeignKey	bool
-	
+	fieldName    string
+	gotype       reflect.Type
+	isPK         bool
+	isAutoIncr   bool
+	isNotNull    bool
+	isForeignKey bool
+
 	//example : bundle(id_bundle)
 	foreignReference string
-	
 }
 
 // Rename allows you to specify the column name in the table
@@ -813,9 +811,8 @@ func readColumnsParams(cm *ColumnMap, f reflect.StructField) {
 		} else {
 			tagParams = strings.Split(splittedTag[1], structTagParamsSeparator)
 		}
-		
-		
-		fmt.Println("tag readed : ", v)
+
+		fmt.Println("tag readed : ", fullTag)
 
 		switch tagKey {
 		case "nn":
@@ -836,7 +833,7 @@ func readColumnsParams(cm *ColumnMap, f reflect.StructField) {
 		//unique tag
 		case "ai":
 			cm.isAutoIncr = true
-		
+
 		case "fk":
 			cm.isForeignKey = true
 			cm.foreignReference = tagParams[0]
@@ -962,7 +959,7 @@ func (m *DbMap) createForeignKey(tableName, columnName, foreignReference string)
 	requete.WriteString(") references ")
 	requete.WriteString(foreignReference)
 	requete.WriteString(";")
-	
+
 	m.Exec(requete.String())
 }
 
